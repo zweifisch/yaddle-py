@@ -78,7 +78,7 @@ def parse(tokens):
     pipe = op('|')
     ospace = skip(maybe(space))
     enum = name_with_space + \
-        many(ospace + skip(pipe) + ospace + name_with_space) \
+        oneplus(ospace + skip(pipe) + ospace + name_with_space) \
         >> flatten >> anno("enum")
 
     num = some(t('NUMBER')) >> tokval >> int
@@ -123,25 +123,51 @@ def parse(tokens):
     return exprs.parse(list(tokens))
 
 
-def generate_schema(parsed):
-    ret = {"type": "object", "properties": {}}
-    key = None
-    for (tp, val) in parsed:
-        if tp == "key":
-            key = val
-        elif tp == "enum":
-            ret["properties"][key] = {"enum": val}
-        elif tp == "string":
-            ret["properties"][key] = {"type": tp}
-            (minlen, maxlen, pattern) = val
-            if minlen:
-                ret["properties"][key]["minLength"] = minlen
-            if maxlen:
-                ret["properties"][key]["maxLength"] = maxlen
-            if pattern:
-                ret["properties"][key]["pattern"] = pattern
-
-    return ret
+def generate_schema(node):
+    (tp, val) = node
+    if tp == "enum":
+        return {"enum": val}
+    if tp == "string":
+        (nrange, pattern) = val
+        ret = {"type": tp}
+        if nrange is not None:
+            (nmin, nmax) = nrange
+            if nmin is not None:
+                ret["minLength"] = nmin
+            if nmax is not None:
+                ret["maxLength"] = nmax
+        if pattern is not None:
+            ret["pattern"] = pattern
+        return ret
+    if tp == "number":
+        ret = {"type": tp}
+        if val is not None:
+            (l, h, step) = val
+            if l is not None:
+                ret["minimum"] = l
+            if h is not None:
+                ret["maximum"] = h
+            if step is not None:
+                ret["multipleOf"] = step
+        return ret
+    if tp == "array":
+        ret = {"type": tp}
+        (items, size_range) = val
+        items = list(map(generate_schema, items))
+        if items:
+            ret["items"] = {"anyOf": items}
+        if size_range:
+            (l, h) = size_range
+            if h is not None:
+                ret["maxItems"] = h
+            if l is not None:
+                ret["minItems"] = l
+        return ret
+    if tp == "object":
+        properties = {}
+        for (k, v) in val.items():
+            properties[k] = generate_schema(v)
+        return {"type": "object", "properties": properties}
 
 
 def loads(source):

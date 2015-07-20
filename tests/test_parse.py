@@ -90,20 +90,15 @@ id: str{32,32}"""
                                "y": ("string", ((12, 12), None))})})
     assert parse(tokenize(input)) == expected
 
-
-def _test_loads():
-    input = "role: admin | author | role with space"
-    expected = {'type': 'object',
-                'properties': {'role':
-                               {'enum':
-                                ['admin', 'author', 'role with space']}}}
-    assert loads(input) == expected
-
-    input = """role: admin | role with space
- user:
-    name: str{3,20}"""
-    expected = {'type': 'object',
-                'properties': {'role':
-                               {'enum':
-                                ['admin', 'author', 'role with space']}}}
-    assert loads(input) == expected
+    input = """root:
+    parent:
+        child: str
+        child2: str
+root2: str"""
+    expected = ("object",
+                {"root": ("object",
+                          {"parent": ("object",
+                                      {"child": ("string", (None, None)),
+                                       "child2": ("string", (None, None))})}),
+                 "root2": ("string", (None, None))})
+    assert parse(tokenize(input)) == expected
