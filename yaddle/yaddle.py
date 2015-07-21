@@ -9,19 +9,22 @@ def tokenize(input):
         ('OP', (r'[{}\[\]?$:,|]',)),
         ('REGEXP', (r'/.*/',)),
         ('NUMBER', (r'0|([1-9][0-9]*)',)),
-        ('NL', (r'[\r\n]+',)),
+        ('COMMENT', (r'#.*',)),
+        ('NL', (r'\n+',)),
         ('SPACE', (r'[ \t]+',))
     ]
     t = make_tokenizer(token_specs)
-    return indentation(t(input))
+    return indentation(t("\n".join([l.rstrip() for l in input.splitlines()])))
 
 
 def indentation(tokens):
-    "indentation"
+    "add indent/dedent and remove comments"
     newline = False
     level = 0
     indent_with = None
     for token in tokens:
+        if token.type == "COMMENT":
+            continue
         if token.type == "NL":
             newline = True
             yield token
@@ -32,22 +35,26 @@ def indentation(tokens):
                     if not indent_with:
                         indent_with = token.value
                     indent_level = token.value.count(indent_with)
+                    if indent_level * indent_with != token.value:
+                        raise Exception("Bad indentation at %d,%d" %
+                                        token.start)
                     if indent_level > level:
                         for l in range(indent_level - level):
                             yield Token("INDENT", indent_with)
                     elif indent_level < level:
-                        for l in range(indent_level - level):
-                            yield Token("DEDENT", indent_with)
+                        for l in range(level - indent_level):
+                            yield Token("DEDENT", '')
                     level = indent_level
                 else:
                     for l in range(level):
-                        yield Token("DEDENT", indent_with)
+                        yield Token("DEDENT", '')
                     level = 0
                     yield token
             else:
                 yield token
+    yield Token("NL", "\n")  # make last line looks the same as other lines
     for l in range(level):
-        yield Token("DEDENT", indent_with)
+        yield Token("DEDENT", '')
 
 
 tokval = lambda tok: tok.value
@@ -110,16 +117,17 @@ def parse(tokens):
     dedent = some(t("DEDENT")) >> tokval
     colon = op(":")
     nl = some(t('NL'))
+    key = name_with_space + ospace + skip(colon) + ospace
 
     obj = forward_decl()
-    key = name_with_space + ospace + skip(colon) + ospace
-    keyval = key + ((string | enum) | (skip(nl) + skip(indent) + obj + skip(dedent))) \
-        >> list
-    obj.define(oneplus(keyval + skip(maybe(nl))) >> dict >> anno("object"))
+    oneline_schema = (string | number | integer | enum | array)
+    nested_obj = skip(nl) + skip(indent) + obj + skip(dedent)
+    obj.define(oneplus(key + ((oneline_schema + skip(nl)) | nested_obj)
+                       >> list) >> dict >> anno("object"))
 
-    schema.define(obj | array | string | number | integer | enum)
+    schema.define(obj | oneline_schema)
 
-    exprs = schema + skip(finished)
+    exprs = schema + skip(maybe(nl)) + skip(finished)
     return exprs.parse(list(tokens))
 
 

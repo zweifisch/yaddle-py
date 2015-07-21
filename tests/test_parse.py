@@ -1,16 +1,24 @@
 from yaddle import *  # noqa
+import pytest
 
 
 def test_tokenize():
     input = """user:
     name: str{3,20}
-    id: str
-"""
+    id: str"""
     expected = ["NAME", "OP", "NL",
                 "INDENT", "NAME", "OP", "SPACE",
                 "NAME", "OP", "NUMBER", "OP", "NUMBER", "OP", "NL",
                 "NAME", "OP", "SPACE", "NAME", "NL", "DEDENT"]
     assert map(lambda x: x.type, tokenize(input)) == expected
+
+
+def test_bad_indentation():
+    with pytest.raises(Exception) as e:
+        parse(tokenize("""user:
+    name: str
+       id: str"""))
+    assert "Bad indentation at 3,1" == str(e.value)
 
 
 def test_parse_enum():
@@ -93,12 +101,21 @@ id: str{32,32}"""
     input = """root:
     parent:
         child: str
-        child2: str
-root2: str"""
+        child2: str"""
     expected = ("object",
                 {"root": ("object",
                           {"parent": ("object",
                                       {"child": ("string", (None, None)),
-                                       "child2": ("string", (None, None))})}),
-                 "root2": ("string", (None, None))})
+                                       "child2": ("string", (None, None))})})})
+    assert parse(tokenize(input)) == expected
+
+    input = """root:
+    parent:
+        child: str
+    parent2: str"""
+    expected = ("object",
+                {"root": ("object",
+                          {"parent": ("object",
+                                      {"child": ("string", (None, None))}),
+                           "parent2": ("string", (None, None))})})
     assert parse(tokenize(input)) == expected
