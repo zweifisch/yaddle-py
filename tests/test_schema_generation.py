@@ -44,27 +44,19 @@ def test_load_number():
     assert loads(input) == expected
 
     input = "int{1,9}"
-    expected = {'type': "number",
+    expected = {'type': "integer",
                 "minimum": 1,
-                "maximum": 9,
-                "multipleOf": 1}
-    assert loads(input) == expected
-
-    input = "int"
-    expected = {'type': "number",
-                "multipleOf": 1}
+                "maximum": 9}
     assert loads(input) == expected
 
     input = "int{1,}"
-    expected = {'type': "number",
-                "minimum": 1,
-                "multipleOf": 1}
+    expected = {'type': "integer",
+                "minimum": 1}
     assert loads(input) == expected
 
     input = "int{,2}"
-    expected = {'type': "number",
-                "maximum": 2,
-                "multipleOf": 1}
+    expected = {'type': "integer",
+                "maximum": 2}
     assert loads(input) == expected
 
 
@@ -101,8 +93,7 @@ def test_loads_array():
                     "anyOf": [
                         {"type": "string",
                          "maxLength": 9},
-                        {"type": "number",
-                         "multipleOf": 1}]
+                        {"type": "integer"}]
                 },
                 "maxItems": 1}
     assert loads(input) == expected

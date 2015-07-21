@@ -88,13 +88,6 @@ def list2dict(key_optional_vals):
     return (kvs, required, sealed, definations)
 
 
-def num2int(num_range):
-    if num_range is None:
-        return (None, None, 1)
-    (f, s) = num_range
-    return (f, s, 1)
-
-
 def parse(tokens):
     name = some(t('NAME')) >> tokval
     space = some(t('SPACE')) >> tokval
@@ -123,8 +116,7 @@ def parse(tokens):
         ospace + skip(op('}')) >> tuple
 
     number = skip(const("num")) + maybe(num_range_step) >> anno("number")
-    integer = skip(const("int")) + maybe(num_range) \
-        >> num2int >> anno("number")
+    integer = skip(const("int")) + maybe(num_range_step) >> anno("integer")
 
     schema = forward_decl()
     array = skip(op('[')) \
@@ -170,7 +162,7 @@ def generate_schema(node):
         if pattern is not None:
             ret["pattern"] = pattern
         return ret
-    elif tp == "number":
+    elif tp == "number" or tp == "integer":
         ret = {"type": tp}
         if val is not None:
             (l, h, step) = val

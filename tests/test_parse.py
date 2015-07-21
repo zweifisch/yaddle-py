@@ -57,11 +57,11 @@ def test_parse_number():
     input = "num{2,3}"
     assert parse(tokenize(input)) == ("number", (2, 3, None))
 
-    input = "int{2,3}"
-    assert parse(tokenize(input)) == ("number", (2, 3, 1))
+    input = "int{2,9,3}"
+    assert parse(tokenize(input)) == ("integer", (2, 9, 3))
 
     input = "int"
-    assert parse(tokenize(input)) == ("number", (None, None, 1))
+    assert parse(tokenize(input)) == ("integer", None)
 
 
 def test_parse_array():
