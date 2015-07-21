@@ -71,31 +71,48 @@ def test_parse_array():
     input = "[num{1,100}]"
     assert parse(tokenize(input)) == ("array",
                                       ([("number", (1, 100, None))], None))
-    input = "[num, str]{2,10}"
+    input = "[num | str]{2,10}"
     assert parse(tokenize(input)) == ("array", ([
         ("number", None),
         ("string", (None, None)),
     ], (2, 10)))
 
+    input = "[@position | str]"
+    assert parse(tokenize(input)) == ("array", ([
+        ("ref", "position"),
+        ("string", (None, None))], None))
+
 
 def test_parse_object():
     input = "name: str{3,20}"
     assert parse(tokenize(input)) == ("object",
-                                      {"name": ("string", ((3, 20), None))})
+                                      ({"name": ("string", ((3, 20), None))},
+                                       ["name"], True, {}))
 
     input = """name: str{3,20}
 id: str{32,32}"""
     assert parse(tokenize(input)) == ("object",
-                                      {"name": ("string", ((3, 20), None)),
-                                       "id": ("string", ((32, 32), None))})
+                                      ({"name": ("string", ((3, 20), None)),
+                                        "id": ("string", ((32, 32), None))},
+                                       ["name", "id"], True, {}))
+
+    input = """name?: str{3,20}
+id: str{32,32}
+..."""
+    assert parse(tokenize(input)) == ("object",
+                                      ({"name": ("string", ((3, 20), None)),
+                                        "id": ("string", ((32, 32), None))},
+                                       ["id"], False, {}))
 
     input = """location:
     x: str{12,12}
     y: str{12,12}"""
     expected = ("object",
-                {"location": ("object",
-                              {"x": ("string", ((12, 12), None)),
-                               "y": ("string", ((12, 12), None))})})
+                ({"location": ("object",
+                               ({"x": ("string", ((12, 12), None)),
+                                 "y": ("string", ((12, 12), None))},
+                                ["x", "y"], True, {}))},
+                 ["location"], True, {}))
     assert parse(tokenize(input)) == expected
 
     input = """root:
@@ -103,10 +120,13 @@ id: str{32,32}"""
         child: str
         child2: str"""
     expected = ("object",
-                {"root": ("object",
-                          {"parent": ("object",
-                                      {"child": ("string", (None, None)),
-                                       "child2": ("string", (None, None))})})})
+                ({"root": ("object",
+                           ({"parent": ("object",
+                                        ({"child": ("string", (None, None)),
+                                          "child2": ("string", (None, None))},
+                                         ["child", "child2"], True, {}))},
+                            ["parent"], True, {}))},
+                 ["root"], True, {}))
     assert parse(tokenize(input)) == expected
 
     input = """root:
@@ -114,8 +134,16 @@ id: str{32,32}"""
         child: str
     parent2: str"""
     expected = ("object",
-                {"root": ("object",
-                          {"parent": ("object",
-                                      {"child": ("string", (None, None))}),
-                           "parent2": ("string", (None, None))})})
+                ({"root": ("object",
+                           ({"parent": ("object",
+                                        ({"child": ("string", (None, None))},
+                                         ["child"], True, {})),
+                             "parent2": ("string", (None, None))},
+                            ["parent", "parent2"], True, {}))},
+                 ["root"], True, {}))
     assert parse(tokenize(input)) == expected
+
+
+def test_parse_ref():
+    input = "@position"
+    assert parse(tokenize(input)) == ("ref", "position")

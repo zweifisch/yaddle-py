@@ -68,6 +68,12 @@ def test_load_number():
     assert loads(input) == expected
 
 
+def test_loads_ref():
+    input = """@location"""
+    expected = {'$ref': '#/definations/location'}
+    assert loads(input) == expected
+
+
 def test_loads_array():
     input = """[]"""
     expected = {'type': 'array'}
@@ -84,7 +90,12 @@ def test_loads_array():
                 "minItems": 1}
     assert loads(input) == expected
 
-    input = """[str{,9}, int]{,1}"""
+    input = """[str]"""
+    expected = {'type': 'array',
+                "items": {"type": "string"}}
+    assert loads(input) == expected
+
+    input = """[str{,9} | int]{,1}"""
     expected = {'type': 'array',
                 "items": {
                     "anyOf": [
@@ -99,21 +110,51 @@ def test_loads_array():
 
 def test_loads_object():
     input = """role: str
-name: str"""
+name: str
+..."""
     expected = {'type': 'object',
                 'properties': {'role': {'type': "string"},
-                               "name": {"type": "string"}}}
+                               "name": {"type": "string"}},
+                'required': ["role", "name"],
+                "additionalProperties": True}
     assert loads(input) == expected
 
     input = """role: str
-location:
+location?:
     x: num
     y: num"""
     expected = {'type': 'object',
+                'required': ["role"],
+                "additionalProperties": False,
                 'properties': {'role': {'type': "string"},
                                "location":
                                {"type": "object",
+                                "required": ["x", "y"],
+                                "additionalProperties": False,
                                 "properties": {
                                     "x": {"type": "number"},
                                     "y": {"type": "number"}}}}}
+    assert loads(input) == expected
+
+    input = """
+@location:
+    x: num
+    y: num
+start: @location
+end: @location
+"""
+    expected = {'type': 'object',
+                'definations': {
+                    "location": {
+                        "type": "object",
+                        "properties": {
+                            "x": {"type": "number"},
+                            "y": {"type": "number"}},
+                        "required": ["x", "y"],
+                        "additionalProperties": False}
+                },
+                'properties': {'start': {'$ref': "#/definations/location"},
+                               'end': {'$ref': "#/definations/location"}},
+                'required': ["start", "end"],
+                "additionalProperties": False}
     assert loads(input) == expected

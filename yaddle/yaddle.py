@@ -6,7 +6,7 @@ from funcparserlib.lexer import make_tokenizer, Token
 def tokenize(input):
     token_specs = [
         ('NAME', (r'[A-Za-z_][A-Za-z_0-9]*',)),
-        ('OP', (r'[{}\[\]?$:,|]',)),
+        ('OP', (r'([{}\[\]?$:,|@]|\.{3})',)),
         ('REGEXP', (r'/.*/',)),
         ('NUMBER', (r'0|([1-9][0-9]*)',)),
         ('COMMENT', (r'#.*',)),
@@ -68,6 +68,24 @@ flatten = lambda l: sum(([x] if not isinstance(x, (list, tuple))
 anno = lambda tp: lambda x: (tp, x)
 append = lambda (head, tail): head + [tail] if tail else head
 fst = lambda (xs): xs[0]
+always = lambda val: lambda _: val
+
+
+def list2dict(key_optional_vals):
+    required = []
+    kvs = {}
+    definations = {}
+    sealed = True
+    for (key, optional, val) in key_optional_vals:
+        if key is None:
+            sealed = False
+        elif key == "@":
+            definations[optional] = val
+        else:
+            if not optional:
+                required.append(key)
+            kvs[key] = val
+    return (kvs, required, sealed, definations)
 
 
 def num2int(num_range):
@@ -110,24 +128,29 @@ def parse(tokens):
 
     schema = forward_decl()
     array = skip(op('[')) \
-        + (many(schema + ospace + skip(op(","))) + ospace + maybe(schema) >> append) \
+        + (many(schema + ospace + skip(op("|"))) + ospace + maybe(schema) >> append) \
         + skip(op(']')) + maybe(num_range) >> anno("array")
 
     indent = some(t("INDENT")) >> tokval >> anno("indent")
     dedent = some(t("DEDENT")) >> tokval
-    colon = op(":")
     nl = some(t('NL'))
-    key = name_with_space + ospace + skip(colon) + ospace
+    defination = op("@") + name
+    key = ((name_with_space + maybe(op("?"))) | defination) \
+        + ospace + skip(op(":")) + ospace
+    dots = op("...") >> always((None, None, None))
+
+    ref = skip(op("@")) + name >> anno("ref")
 
     obj = forward_decl()
-    oneline_schema = (string | number | integer | enum | array)
+    oneline_schema = (ref | string | number | integer | enum | array)
     nested_obj = skip(nl) + skip(indent) + obj + skip(dedent)
-    obj.define(oneplus(key + ((oneline_schema + skip(nl)) | nested_obj)
-                       >> list) >> dict >> anno("object"))
+    obj.define(oneplus(((key + ((oneline_schema + skip(nl)) | nested_obj))
+                       | (dots + skip(nl)))
+                       >> list) >> list2dict >> anno("object"))
 
     schema.define(obj | oneline_schema)
 
-    exprs = schema + skip(maybe(nl)) + skip(finished)
+    exprs = skip(maybe(nl)) + schema + skip(maybe(nl)) + skip(finished)
     return exprs.parse(list(tokens))
 
 
@@ -135,7 +158,7 @@ def generate_schema(node):
     (tp, val) = node
     if tp == "enum":
         return {"enum": val}
-    if tp == "string":
+    elif tp == "string":
         (nrange, pattern) = val
         ret = {"type": tp}
         if nrange is not None:
@@ -147,7 +170,7 @@ def generate_schema(node):
         if pattern is not None:
             ret["pattern"] = pattern
         return ret
-    if tp == "number":
+    elif tp == "number":
         ret = {"type": tp}
         if val is not None:
             (l, h, step) = val
@@ -158,12 +181,17 @@ def generate_schema(node):
             if step is not None:
                 ret["multipleOf"] = step
         return ret
-    if tp == "array":
+    elif tp == "ref":
+        return {"$ref": "#/definations/%s" % val}
+    elif tp == "array":
         ret = {"type": tp}
         (items, size_range) = val
         items = list(map(generate_schema, items))
         if items:
-            ret["items"] = {"anyOf": items}
+            if len(items) > 1:
+                ret["items"] = {"anyOf": items}
+            else:
+                ret["items"] = items[0]
         if size_range:
             (l, h) = size_range
             if h is not None:
@@ -171,22 +199,30 @@ def generate_schema(node):
             if l is not None:
                 ret["minItems"] = l
         return ret
-    if tp == "object":
+    elif tp == "object":
         properties = {}
-        for (k, v) in val.items():
+        (kvs, required, sealed, definations) = val
+        for (k, v) in kvs.items():
             properties[k] = generate_schema(v)
-        return {"type": "object", "properties": properties}
+        ret = {"type": "object", "properties": properties,
+               "required": required, "additionalProperties": not sealed}
+        if definations:
+            defs = {}
+            for (k, v) in definations.items():
+                defs[k] = generate_schema(v)
+            ret["definations"] = defs
+        return ret
 
 
 def loads(source):
     """example input
-role: admin | author | collaborator | role with space
+@role: admin | author | collaborator | role with space
 
-user:
-   name: str{3,20}
-   age: int{10,200}
-   gender: male | female
-   roles: [$role]
-   description?: str{200}
+@user:
+    name: str{3,20}
+    age: int{10,200}
+    gender: male | female
+    roles: [@role]
+    description?: str{200}
 """
     return generate_schema(parse(tokenize(source)))
