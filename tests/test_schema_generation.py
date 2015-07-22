@@ -2,6 +2,10 @@ from yaddle import loads
 
 
 def test_loads_enum():
+    input = "test"
+    expected = {'enum': ['test']}
+    assert loads(input) == expected
+
     input = "admin | author | role with space"
     expected = {'enum': ['admin', 'author', 'role with space']}
     assert loads(input) == expected
@@ -62,7 +66,7 @@ def test_load_number():
 
 def test_loads_ref():
     input = """@location"""
-    expected = {'$ref': '#/definations/location'}
+    expected = {'$ref': '#/definitions/location'}
     assert loads(input) == expected
 
 
@@ -90,7 +94,7 @@ def test_loads_array():
     input = """[str{,9} | int]{,1}"""
     expected = {'type': 'array',
                 "items": {
-                    "anyOf": [
+                    "oneOf": [
                         {"type": "string",
                          "maxLength": 9},
                         {"type": "integer"}]
@@ -101,13 +105,16 @@ def test_loads_array():
 
 def test_loads_object():
     input = """role: str
+active?: bool
+null?: null
 name: str
 ..."""
     expected = {'type': 'object',
                 'properties': {'role': {'type': "string"},
-                               "name": {"type": "string"}},
-                'required': ["role", "name"],
-                "additionalProperties": True}
+                               "name": {"type": "string"},
+                               "null": {"type": "null"},
+                               "active": {"type": "boolean"}},
+                'required': ["role", "name"]}
     assert loads(input) == expected
 
     input = """role: str
@@ -135,7 +142,7 @@ start: @location
 end: @location
 """
     expected = {'type': 'object',
-                'definations': {
+                'definitions': {
                     "location": {
                         "type": "object",
                         "properties": {
@@ -144,8 +151,119 @@ end: @location
                         "required": ["x", "y"],
                         "additionalProperties": False}
                 },
-                'properties': {'start': {'$ref': "#/definations/location"},
-                               'end': {'$ref': "#/definations/location"}},
+                'properties': {'start': {'$ref': "#/definitions/location"},
+                               'end': {'$ref': "#/definitions/location"}},
                 'required': ["start", "end"],
                 "additionalProperties": False}
+    assert loads(input) == expected
+
+
+def test_mount_point():
+    input = """
+@diskDevice:
+    type: disk
+    device: /^/dev/[^/]+(/[^/]+)*$/
+@diskUUID:
+    type: disk
+    label: /^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$/
+@nfs:
+    type: nfs
+    remotePath: /^(/[^/]+)+$/
+    server: %hostname | %ipv4 | %ipv6
+@tmpfs:
+    type: tmpfs
+    sizeInMB: int{16,512}
+
+storage: @diskDevice | @diskUUID | @nfs | @tmpfs
+fstype?: ext3 | ext4 | btrfs
+options?: [str]{1,}!
+readonly?: bool
+...
+"""
+    expected = {
+        # "id": "http://some.site.somewhere/entry-schema#",
+        # "$schema": "http://json-schema.org/draft-04/schema#",
+        # "description": "schema for an fstab entry",
+        "type": "object",
+        "required": ["storage"],
+        "properties": {
+            "storage": {
+                # "type": "object",
+                "oneOf": [
+                    {"$ref": "#/definitions/diskDevice"},
+                    {"$ref": "#/definitions/diskUUID"},
+                    {"$ref": "#/definitions/nfs"},
+                    {"$ref": "#/definitions/tmpfs"}
+                ]
+            },
+            "fstype": {
+                "enum": ["ext3", "ext4", "btrfs"]
+            },
+            "options": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string"},
+                "uniqueItems": True
+            },
+            "readonly": {"type": "boolean"}
+            },
+        "definitions": {
+            "diskDevice": {
+                "type": "object",
+                "properties": {
+                    "type": {"enum": ["disk"]},
+                    "device": {
+                        "type": "string",
+                        "pattern": "^/dev/[^/]+(/[^/]+)*$"
+                    }
+                },
+                "required": ["type", "device"],
+                "additionalProperties": False
+            },
+            "diskUUID": {
+                "type": "object",
+                "properties": {
+                    "type": {"enum": ["disk"]},
+                    "label": {
+                        "type": "string",
+                        "pattern": "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"  # noqa
+                    }
+                },
+                "required": ["type", "label"],
+                "additionalProperties": False
+            },
+            "nfs": {
+                "type": "object",
+                "properties": {
+                    "type": {"enum": ["nfs"]},
+                    "remotePath": {
+                        "type": "string",
+                        "pattern": "^(/[^/]+)+$"
+                    },
+                    "server": {
+                        # "type": "string",
+                        "oneOf": [
+                            {"format": "hostname"},
+                            {"format": "ipv4"},
+                            {"format": "ipv6"}
+                        ]
+                }
+            },
+                "required": ["type", "remotePath", "server"],
+                "additionalProperties": False
+            },
+            "tmpfs": {
+                "type": "object",
+                "properties": {
+                    "type": {"enum": ["tmpfs"]},
+                    "sizeInMB": {
+                        "type": "integer",
+                        "minimum": 16,
+                        "maximum": 512
+                    }
+            },
+                "required": ["type", "sizeInMB"],
+                "additionalProperties": False
+            }
+    }}
     assert loads(input) == expected

@@ -5,8 +5,8 @@ from funcparserlib.lexer import make_tokenizer, Token
 
 def tokenize(input):
     token_specs = [
-        ('NAME', (r'[A-Za-z_][A-Za-z_0-9]*',)),
-        ('OP', (r'([{}\[\]?$:,|@]|\.{3})',)),
+        ('NAME', (r'[A-Za-z_][A-Za-z_0-9-]*',)),
+        ('OP', (r'([{}\[\]?$:,|@%!]|\.{3})',)),
         ('REGEXP', (r'/.*/',)),
         ('NUMBER', (r'0|([1-9][0-9]*)',)),
         ('COMMENT', (r'#.*',)),
@@ -63,10 +63,9 @@ t = lambda tp: lambda x: x.type == tp
 op = lambda s: a(Token("OP", s)) >> tokval
 
 join = lambda x: "".join(x)
-flatten = lambda l: sum(([x] if not isinstance(x, (list, tuple))
-                        else flatten(x) for x in l), [])
 anno = lambda tp: lambda x: (tp, x)
 append = lambda (head, tail): head + [tail] if tail else head
+prepend = lambda (first, rest): [first] + rest
 fst = lambda (xs): xs[0]
 always = lambda val: lambda _: val
 
@@ -74,30 +73,32 @@ always = lambda val: lambda _: val
 def list2dict(key_optional_vals):
     required = []
     kvs = {}
-    definations = {}
+    definitions = {}
     sealed = True
     for (key, optional, val) in key_optional_vals:
         if key is None:
             sealed = False
         elif key == "@":
-            definations[optional] = val
+            definitions[optional] = val
         else:
             if not optional:
                 required.append(key)
             kvs[key] = val
-    return (kvs, required, sealed, definations)
+    return (kvs, required, sealed, definitions)
 
 
 def parse(tokens):
     name = some(t('NAME')) >> tokval
     space = some(t('SPACE')) >> tokval
-    name_with_space = name + many(space + name) >> flatten >> join
+    # cant use append here
+    name_with_space = name + many(space + name >> join) >> prepend >> join
 
-    pipe = op('|')
     ospace = skip(maybe(space))
-    enum = name_with_space + \
-        oneplus(ospace + skip(pipe) + ospace + name_with_space) \
-        >> flatten >> anno("enum")
+    enum = many(name_with_space + ospace + skip(op("|")) + ospace) \
+        + name_with_space >> append >> anno("enum")
+
+    boolean = const("bool") >> always(None) >> anno("boolean")
+    null = const("null") >> always(None) >> anno("null")
 
     num = some(t('NUMBER')) >> tokval >> int
     num_range = skip(op('{')) + ospace + maybe(num) + ospace + \
@@ -110,6 +111,8 @@ def parse(tokens):
               (maybe(num_range) + ospace + (regexp))) \
         >> anno("string")
 
+    _format = skip(op("%")) + name >> anno("format")
+
     num_range_step = skip(op('{')) + ospace + maybe(num) + ospace + \
         skip(op(",")) + ospace + maybe(num) + \
         maybe(skip(op(",")) + ospace + num) + \
@@ -119,28 +122,37 @@ def parse(tokens):
     integer = skip(const("int")) + maybe(num_range_step) >> anno("integer")
 
     schema = forward_decl()
-    array = skip(op('[')) \
-        + (many(schema + ospace + skip(op("|"))) + ospace + maybe(schema) >> append) \
-        + skip(op(']')) + maybe(num_range) >> anno("array")
+    array = skip(op('[')) + maybe(schema) + skip(op(']')) + maybe(num_range) \
+        + maybe(op("!")) >> anno("array")
 
     indent = some(t("INDENT")) >> tokval >> anno("indent")
     dedent = some(t("DEDENT")) >> tokval
     nl = some(t('NL'))
-    defination = op("@") + name
-    key = ((name_with_space + maybe(op("?"))) | defination) \
+    definition = op("@") + name
+    key = ((name_with_space + maybe(op("?"))) | definition) \
         + ospace + skip(op(":")) + ospace
     dots = op("...") >> always((None, None, None))
 
     ref = skip(op("@")) + name >> anno("ref")
 
+    base_schema = ref | string | number | integer | boolean | null | _format \
+        | array
+
+    oneof = oneplus(base_schema + ospace + skip(op("|")) + ospace) + base_schema \
+        >> append >> anno("oneof")
+    anyof = oneplus(base_schema + ospace + skip(op(",")) + ospace) + base_schema \
+        >> append >> anno("anyof")
+    allof = oneplus(base_schema + ospace + skip(op("&")) + ospace) + base_schema \
+        >> append >> anno("allof")
+    simple_schema = anyof | oneof | allof | base_schema | enum | array
+
     obj = forward_decl()
-    oneline_schema = (ref | string | number | integer | enum | array)
     nested_obj = skip(nl) + skip(indent) + obj + skip(dedent)
-    obj.define(oneplus(((key + ((oneline_schema + skip(nl)) | nested_obj))
+    obj.define(oneplus(((key + ((simple_schema + skip(nl)) | nested_obj))
                        | (dots + skip(nl)))
                        >> list) >> list2dict >> anno("object"))
 
-    schema.define(obj | oneline_schema)
+    schema.define(obj | simple_schema)
 
     exprs = skip(maybe(nl)) + schema + skip(maybe(nl)) + skip(finished)
     return exprs.parse(list(tokens))
@@ -174,36 +186,44 @@ def generate_schema(node):
                 ret["multipleOf"] = step
         return ret
     elif tp == "ref":
-        return {"$ref": "#/definations/%s" % val}
+        return {"$ref": "#/definitions/%s" % val}
     elif tp == "array":
         ret = {"type": tp}
-        (items, size_range) = val
-        items = list(map(generate_schema, items))
-        if items:
-            if len(items) > 1:
-                ret["items"] = {"anyOf": items}
-            else:
-                ret["items"] = items[0]
+        (schema, size_range, unique) = val
+        if schema:
+            ret["items"] = generate_schema(schema)
         if size_range:
             (l, h) = size_range
             if h is not None:
                 ret["maxItems"] = h
             if l is not None:
                 ret["minItems"] = l
+        if unique:
+            ret["uniqueItems"] = True
         return ret
     elif tp == "object":
         properties = {}
-        (kvs, required, sealed, definations) = val
+        (kvs, required, sealed, definitions) = val
         for (k, v) in kvs.items():
             properties[k] = generate_schema(v)
         ret = {"type": "object", "properties": properties,
-               "required": required, "additionalProperties": not sealed}
-        if definations:
+               "required": required}
+        if sealed:
+            ret["additionalProperties"] = False
+        if definitions:
             defs = {}
-            for (k, v) in definations.items():
+            for (k, v) in definitions.items():
                 defs[k] = generate_schema(v)
-            ret["definations"] = defs
+            ret["definitions"] = defs
         return ret
+    elif tp == "anyof" or tp == "oneof" or tp == "allof":
+        return dict([(tp[:3] + "Of", list(map(generate_schema, val)))])
+    elif tp == "format":
+        return {"format": val}
+    elif tp == "boolean":
+        return {"type": "boolean"}
+    elif tp == "null":
+        return {"type": "null"}
 
 
 def loads(source):
@@ -215,6 +235,6 @@ def loads(source):
     age: int{10,200}
     gender: male | female
     roles: [@role]
-    description?: str{200}
+    description?: str{,200}
 """
     return generate_schema(parse(tokenize(source)))

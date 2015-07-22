@@ -27,6 +27,11 @@ def test_parse_enum():
                                                "role with space"])
 
 
+def test_parse_bool():
+    input = "bool"
+    assert parse(tokenize(input)) == ("boolean", None)
+
+
 def test_parse_string():
     input = "str{3,20}"
     assert parse(tokenize(input)) == ("string", ((3, 20), None))
@@ -66,21 +71,23 @@ def test_parse_number():
 
 def test_parse_array():
     input = "[]"
-    assert parse(tokenize(input)) == ("array",
-                                      ([], None))
+    assert parse(tokenize(input)) == ("array", (None, None, None))
+
     input = "[num{1,100}]"
     assert parse(tokenize(input)) == ("array",
-                                      ([("number", (1, 100, None))], None))
+                                      (("number", (1, 100, None)), None, None))
+
     input = "[num | str]{2,10}"
-    assert parse(tokenize(input)) == ("array", ([
-        ("number", None),
-        ("string", (None, None)),
-    ], (2, 10)))
+    expected = ("array", (('oneof',
+                          [("number", None), ("string", (None, None))]),
+                          (2, 10), None))
+    assert parse(tokenize(input)) == expected
 
     input = "[@position | str]"
-    assert parse(tokenize(input)) == ("array", ([
-        ("ref", "position"),
-        ("string", (None, None))], None))
+    expected = ("array", (("oneof",
+                           [("ref", "position"), ("string", (None, None))]),
+                          None, None))
+    assert parse(tokenize(input)) == expected
 
 
 def test_parse_object():
