@@ -6,8 +6,9 @@ from funcparserlib.lexer import make_tokenizer, Token
 def tokenize(input):
     token_specs = [
         ('NAME', (r'[A-Za-z_][A-Za-z_0-9-]*',)),
-        ('OP', (r'([{}\[\]?$:,|@%!]|\.{3})',)),
         ('REGEXP', (r'/.*/',)),
+        ('STRING', (r'"((\\")|[^"])*"',)),
+        ('OP', (r'([{}\[\]?$:,|@%!/]|\.{3})',)),
         ('NUMBER', (r'0|([1-9][0-9]*)',)),
         ('COMMENT', (r'#.*',)),
         ('NL', (r'\n+',)),
@@ -69,6 +70,8 @@ prepend = lambda (first, rest): [first] + rest
 fst = lambda (xs): xs[0]
 always = lambda val: lambda _: val
 
+strip = lambda char: lambda x: x.strip(char)
+
 
 def list2dict(key_optional_vals):
     required = []
@@ -91,11 +94,12 @@ def parse(tokens):
     name = some(t('NAME')) >> tokval
     space = some(t('SPACE')) >> tokval
     # cant use append here
-    name_with_space = name + many(space + name >> join) >> prepend >> join
+
+    raw_string = some(t('STRING')) >> tokval >> strip('"')
 
     ospace = skip(maybe(space))
-    enum = many(name_with_space + ospace + skip(op("|")) + ospace) \
-        + name_with_space >> append >> anno("enum")
+    enum = many((name | raw_string) + ospace + skip(op("|")) + ospace) \
+        + (name | raw_string) >> append >> anno("enum")
 
     boolean = const("bool") >> always(None) >> anno("boolean")
     null = const("null") >> always(None) >> anno("null")
@@ -105,7 +109,7 @@ def parse(tokens):
         skip(op(",")) + ospace + maybe(num) + \
         ospace + skip(op('}')) >> tuple
 
-    regexp = some(t("REGEXP")) >> tokval >> (lambda x: x.strip("/"))
+    regexp = some(t("REGEXP")) >> tokval >> strip("/")
     string = ((skip(const("str")) +
                maybe(num_range) + ospace + maybe(regexp)) |
               (maybe(num_range) + ospace + (regexp))) \
@@ -122,13 +126,16 @@ def parse(tokens):
     integer = skip(const("int")) + maybe(num_range_step) >> anno("integer")
 
     schema = forward_decl()
-    array = skip(op('[')) + maybe(schema) + skip(op(']')) + maybe(num_range) \
-        + maybe(op("!")) >> anno("array")
+
+    array = skip(op('[')) \
+        + (many(schema + ospace + skip(op(","))) + ospace + maybe(schema) >> append) \
+        + skip(op(']')) + maybe(num_range) + maybe(op("!")) >> anno("array")
 
     indent = some(t("INDENT")) >> tokval >> anno("indent")
     dedent = some(t("DEDENT")) >> tokval
     nl = some(t('NL'))
     definition = op("@") + name
+    name_with_space = name + many(space + name >> join) >> prepend >> join
     key = ((name_with_space + maybe(op("?"))) | definition) \
         + ospace + skip(op(":")) + ospace
     dots = op("...") >> always((None, None, None))
@@ -140,7 +147,7 @@ def parse(tokens):
 
     oneof = oneplus(base_schema + ospace + skip(op("|")) + ospace) + base_schema \
         >> append >> anno("oneof")
-    anyof = oneplus(base_schema + ospace + skip(op(",")) + ospace) + base_schema \
+    anyof = oneplus(base_schema + ospace + skip(op("/")) + ospace) + base_schema \
         >> append >> anno("anyof")
     allof = oneplus(base_schema + ospace + skip(op("&")) + ospace) + base_schema \
         >> append >> anno("allof")
@@ -189,9 +196,12 @@ def generate_schema(node):
         return {"$ref": "#/definitions/%s" % val}
     elif tp == "array":
         ret = {"type": tp}
-        (schema, size_range, unique) = val
-        if schema:
-            ret["items"] = generate_schema(schema)
+        (items, size_range, unique) = val
+        if items:
+            if (len(items)) == 1:
+                ret["items"] = generate_schema(items[0])
+            else:
+                ret["items"] = list(map(generate_schema, items))
         if size_range:
             (l, h) = size_range
             if h is not None:

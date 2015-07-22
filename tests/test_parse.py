@@ -12,6 +12,11 @@ def test_tokenize():
                 "NAME", "OP", "SPACE", "NAME", "NL", "DEDENT"]
     assert map(lambda x: x.type, tokenize(input)) == expected
 
+    input = '"str\\"ing" "more"'
+
+    expected = ["STRING", "SPACE", "STRING", "NL"]
+    assert map(lambda x: x.type, tokenize(input)) == expected
+
 
 def test_bad_indentation():
     with pytest.raises(Exception) as e:
@@ -22,7 +27,7 @@ def test_bad_indentation():
 
 
 def test_parse_enum():
-    input = "admin | author | role with space"
+    input = 'admin | author | "role with space"'
     assert parse(tokenize(input)) == ("enum", ["admin", "author",
                                                "role with space"])
 
@@ -71,21 +76,23 @@ def test_parse_number():
 
 def test_parse_array():
     input = "[]"
-    assert parse(tokenize(input)) == ("array", (None, None, None))
+    assert parse(tokenize(input)) == ("array", ([], None, None))
 
     input = "[num{1,100}]"
-    assert parse(tokenize(input)) == ("array",
-                                      (("number", (1, 100, None)), None, None))
+    expected = ("array",
+                ([("number", (1, 100, None))], None, None))
+    assert parse(tokenize(input)) == expected
 
     input = "[num | str]{2,10}"
-    expected = ("array", (('oneof',
-                          [("number", None), ("string", (None, None))]),
+    expected = ("array", ([('oneof',
+                            [("number", None), ("string", (None, None))])],
                           (2, 10), None))
     assert parse(tokenize(input)) == expected
 
-    input = "[@position | str]"
-    expected = ("array", (("oneof",
-                           [("ref", "position"), ("string", (None, None))]),
+    input = "[@position, str | int]"
+    expected = ("array", ([("ref", "position"),
+                           ("oneof", [("string", (None, None)),
+                                      ("integer", None)])],
                           None, None))
     assert parse(tokenize(input)) == expected
 

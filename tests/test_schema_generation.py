@@ -6,8 +6,8 @@ def test_loads_enum():
     expected = {'enum': ['test']}
     assert loads(input) == expected
 
-    input = "admin | author | role with space"
-    expected = {'enum': ['admin', 'author', 'role with space']}
+    input = 'admin | author | "role with space "'
+    expected = {'enum': ['admin', 'author', 'role with space ']}
     assert loads(input) == expected
 
 
