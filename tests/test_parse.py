@@ -7,14 +7,14 @@ def test_tokenize():
     name: str{3,20}
     id: str"""
     expected = ["NAME", "OP", "NL",
-                "INDENT", "NAME", "OP", "SPACE",
+                "INDENT", "NAME", "OP",
                 "NAME", "OP", "NUMBER", "OP", "NUMBER", "OP", "NL",
-                "NAME", "OP", "SPACE", "NAME", "NL", "DEDENT"]
+                "NAME", "OP", "NAME", "NL", "DEDENT"]
     assert map(lambda x: x.type, tokenize(input)) == expected
 
     input = '"str\\"ing" "more"'
 
-    expected = ["STRING", "SPACE", "STRING", "NL"]
+    expected = ["STRING", "STRING", "NL"]
     assert map(lambda x: x.type, tokenize(input)) == expected
 
 

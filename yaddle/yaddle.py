@@ -11,11 +11,10 @@ def tokenize(input):
         ('OP', (r'([{}\[\]?$:,|@%!/]|\.{3})',)),
         ('NUMBER', (r'0|([1-9][0-9]*)',)),
         ('COMMENT', (r'#.*',)),
-        ('NL', (r'\n+',)),
+        ('NL', (r'[\r\n]+',)),
         ('SPACE', (r'[ \t]+',))
     ]
-    t = make_tokenizer(token_specs)
-    return indentation(t("\n".join([l.rstrip() for l in input.splitlines()])))
+    return indentation(make_tokenizer(token_specs)(input))
 
 
 def indentation(tokens):
@@ -51,7 +50,7 @@ def indentation(tokens):
                         yield Token("DEDENT", '')
                     level = 0
                     yield token
-            else:
+            elif token.type != "SPACE":
                 yield token
     yield Token("NL", "\n")  # make last line looks the same as other lines
     for l in range(level):
@@ -63,13 +62,9 @@ const = lambda s: a(Token("NAME", s)) >> tokval
 t = lambda tp: lambda x: x.type == tp
 op = lambda s: a(Token("OP", s)) >> tokval
 
-join = lambda x: "".join(x)
 anno = lambda tp: lambda x: (tp, x)
 append = lambda (head, tail): head + [tail] if tail else head
-prepend = lambda (first, rest): [first] + rest
-fst = lambda (xs): xs[0]
 always = lambda val: lambda _: val
-
 strip = lambda char: lambda x: x.strip(char)
 
 
@@ -92,35 +87,30 @@ def list2dict(key_optional_vals):
 
 def parse(tokens):
     name = some(t('NAME')) >> tokval
-    space = some(t('SPACE')) >> tokval
-    # cant use append here
 
     raw_string = some(t('STRING')) >> tokval >> strip('"')
 
-    ospace = skip(maybe(space))
-    enum = many((name | raw_string) + ospace + skip(op("|")) + ospace) \
+    enum = many((name | raw_string) + skip(op("|"))) \
         + (name | raw_string) >> append >> anno("enum")
 
     boolean = const("bool") >> always(None) >> anno("boolean")
     null = const("null") >> always(None) >> anno("null")
 
     num = some(t('NUMBER')) >> tokval >> int
-    num_range = skip(op('{')) + ospace + maybe(num) + ospace + \
-        skip(op(",")) + ospace + maybe(num) + \
-        ospace + skip(op('}')) >> tuple
+    num_range = skip(op('{')) + maybe(num) + \
+        skip(op(",")) + maybe(num) + skip(op('}')) >> tuple
 
     regexp = some(t("REGEXP")) >> tokval >> strip("/")
     string = ((skip(const("str")) +
-               maybe(num_range) + ospace + maybe(regexp)) |
-              (maybe(num_range) + ospace + (regexp))) \
+               maybe(num_range) + maybe(regexp)) |
+              (maybe(num_range) + (regexp))) \
         >> anno("string")
 
     _format = skip(op("%")) + name >> anno("format")
 
-    num_range_step = skip(op('{')) + ospace + maybe(num) + ospace + \
-        skip(op(",")) + ospace + maybe(num) + \
-        maybe(skip(op(",")) + ospace + num) + \
-        ospace + skip(op('}')) >> tuple
+    num_range_step = skip(op('{')) + maybe(num) + \
+        skip(op(",")) + maybe(num) + \
+        maybe(skip(op(",")) + num) + skip(op('}')) >> tuple
 
     number = skip(const("num")) + maybe(num_range_step) >> anno("number")
     integer = skip(const("int")) + maybe(num_range_step) >> anno("integer")
@@ -128,16 +118,14 @@ def parse(tokens):
     schema = forward_decl()
 
     array = skip(op('[')) \
-        + (many(schema + ospace + skip(op(","))) + ospace + maybe(schema) >> append) \
+        + (many(schema + skip(op(","))) + maybe(schema) >> append) \
         + skip(op(']')) + maybe(num_range) + maybe(op("!")) >> anno("array")
 
     indent = some(t("INDENT")) >> tokval >> anno("indent")
     dedent = some(t("DEDENT")) >> tokval
     nl = some(t('NL'))
     definition = op("@") + name
-    name_with_space = name + many(space + name >> join) >> prepend >> join
-    key = ((name_with_space + maybe(op("?"))) | definition) \
-        + ospace + skip(op(":")) + ospace
+    key = (((name | string) + maybe(op("?"))) | definition) + skip(op(":"))
     dots = op("...") >> always((None, None, None))
 
     ref = skip(op("@")) + name >> anno("ref")
@@ -145,11 +133,11 @@ def parse(tokens):
     base_schema = ref | string | number | integer | boolean | null | _format \
         | array
 
-    oneof = oneplus(base_schema + ospace + skip(op("|")) + ospace) + base_schema \
+    oneof = oneplus(base_schema + skip(op("|"))) + base_schema \
         >> append >> anno("oneof")
-    anyof = oneplus(base_schema + ospace + skip(op("/")) + ospace) + base_schema \
+    anyof = oneplus(base_schema + skip(op("/"))) + base_schema \
         >> append >> anno("anyof")
-    allof = oneplus(base_schema + ospace + skip(op("&")) + ospace) + base_schema \
+    allof = oneplus(base_schema + skip(op("&"))) + base_schema \
         >> append >> anno("allof")
     simple_schema = anyof | oneof | allof | base_schema | enum | array
 
