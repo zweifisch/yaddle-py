@@ -8,13 +8,13 @@ def tokenize(input):
         ('NAME', (r'[A-Za-z_][A-Za-z_0-9-]*',)),
         ('REGEXP', (r'/.*/',)),
         ('STRING', (r'"((\\")|[^"])*"',)),
-        ('OP', (r'([{}\[\]?$:,|@%!/]|\.{3})',)),
+        ('OP', (r'([{}\[\]?$:,|@%!/&]|\.{3})',)),
         ('NUMBER', (r'0|([1-9][0-9]*)',)),
         ('COMMENT', (r'#.*',)),
-        ('NL', (r'[\r\n]+',)),
+        ('NL', (r'[\r\n]+([ \t]+[\r\n]+)*',)),
         ('SPACE', (r'[ \t]+',))
     ]
-    return indentation(make_tokenizer(token_specs)(input))
+    return indentation(make_tokenizer(token_specs)(input + "\n"))
 
 
 def indentation(tokens):
@@ -52,7 +52,6 @@ def indentation(tokens):
                     yield token
             elif token.type != "SPACE":
                 yield token
-    yield Token("NL", "\n")  # make last line looks the same as other lines
     for l in range(level):
         yield Token("DEDENT", '')
 

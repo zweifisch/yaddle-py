@@ -13,8 +13,15 @@ def test_tokenize():
     assert list(map(lambda x: x.type, tokenize(input))) == expected
 
     input = '"str\\"ing" "more"'
-
     expected = ["STRING", "STRING", "NL"]
+    assert list(map(lambda x: x.type, tokenize(input))) == expected
+
+    input = """
+    
+
+        
+"""
+    expected = ["NL"]
     assert list(map(lambda x: x.type, tokenize(input))) == expected
 
 
@@ -145,8 +152,29 @@ id: str{32,32}
 
     input = """root:
     parent:
+        child:
+            child2: null"""
+    expected = ("object",
+                ({"root":
+                  ("object",
+                   ({"parent":
+                     ("object",
+                      ({"child":
+                        ("object",
+                         ({"child2":
+                           ("null", None)},
+                          ["child2"], True, {}))},
+                       ["child"], True, {}))},
+                    ["parent"], True, {}))},
+                 ["root"], True, {}))
+    assert parse(tokenize(input)) == expected
+
+    input = """
+root:
+    parent:
         child: str
-    parent2: str"""
+    parent2: str
+    """
     expected = ("object",
                 ({"root": ("object",
                            ({"parent": ("object",

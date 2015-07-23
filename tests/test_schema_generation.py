@@ -70,6 +70,30 @@ def test_loads_ref():
     assert loads(input) == expected
 
 
+def test_loads_anyOf():
+    input = """@location / @vector"""
+    expected = {"anyOf": [
+        {'$ref': '#/definitions/location'},
+        {'$ref': '#/definitions/vector'}]}
+    assert loads(input) == expected
+
+
+def test_loads_allOf():
+    input = """@location & @vector"""
+    expected = {"allOf": [
+        {'$ref': '#/definitions/location'},
+        {'$ref': '#/definitions/vector'}]}
+    assert loads(input) == expected
+
+
+def test_loads_oneOf():
+    input = """@location | @vector"""
+    expected = {"oneOf": [
+        {'$ref': '#/definitions/location'},
+        {'$ref': '#/definitions/vector'}]}
+    assert loads(input) == expected
+
+
 def test_loads_array():
     input = """[]"""
     expected = {'type': 'array'}
