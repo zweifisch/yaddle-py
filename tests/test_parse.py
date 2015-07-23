@@ -38,6 +38,10 @@ def test_parse_enum():
     assert parse(tokenize(input)) == ("enum", ["admin", "author",
                                                "role with space"])
 
+    input = 'c | 1 | -10.1 | 0 | true | false | null | "null" | "0.1"'
+    expected = ("enum", ["c", 1, -10.1, 0, True, False, None, "null", "0.1"])
+    assert parse(tokenize(input)) == expected
+
 
 def test_parse_bool():
     input = "bool"

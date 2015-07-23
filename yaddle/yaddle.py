@@ -9,7 +9,7 @@ def tokenize(input):
         ('REGEXP', (r'/.*/',)),
         ('STRING', (r'"((\\")|[^"])*"',)),
         ('OP', (r'([{}\[\]?$:,|@%!/&]|\.{3})',)),
-        ('NUMBER', (r'0|([1-9][0-9]*)',)),
+        ('NUMBER', (r'-?(0|[1-9]\d*)(\.\d+)?',)),
         ('COMMENT', (r'#.*',)),
         ('NL', (r'[\r\n]+([ \t]+[\r\n]+)*',)),
         ('SPACE', (r'[ \t]+',))
@@ -90,13 +90,18 @@ def parse(tokens):
 
     raw_string = some(t('STRING')) >> tokval >> strip('"')
 
-    enum = many((name | raw_string) + skip(op("|"))) \
-        + (name | raw_string) >> append >> anno("enum")
+    num = some(t('NUMBER')) >> tokval >> float
+    true = const('true') >> always(True)
+    false = const('false') >> always(False)
+    null_ = const('null') >> always(None)
+
+    enum_item = (num | true | false | null_ | name | raw_string)
+    enum = many(enum_item + skip(op("|"))) + enum_item >> append \
+        >> anno("enum")
 
     boolean = const("bool") >> always(None) >> anno("boolean")
     null = const("null") >> always(None) >> anno("null")
 
-    num = some(t('NUMBER')) >> tokval >> int
     num_range = skip(op('{')) + maybe(num) + \
         skip(op(",")) + maybe(num) + skip(op('}')) >> tuple
 
