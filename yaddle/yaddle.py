@@ -209,8 +209,9 @@ def generate_schema(node):
         (kvs, required, sealed, definitions) = val
         for (k, v) in kvs.items():
             properties[k] = generate_schema(v)
-        ret = {"type": "object", "properties": properties,
-               "required": required}
+        ret = {"type": "object", "properties": properties}
+        if required:
+            ret["required"] = required
         if sealed:
             ret["additionalProperties"] = False
         if definitions:
@@ -241,3 +242,7 @@ def loads(source):
     description?: str{,200}
 """
     return generate_schema(parse(tokenize(source)))
+
+
+def load(fp):
+    return loads(fp.read())

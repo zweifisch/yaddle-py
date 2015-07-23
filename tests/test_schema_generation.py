@@ -230,7 +230,7 @@ readonly?: bool
                 "uniqueItems": True
             },
             "readonly": {"type": "boolean"}
-            },
+        },
         "definitions": {
             "diskDevice": {
                 "type": "object",
@@ -271,8 +271,8 @@ readonly?: bool
                             {"format": "ipv4"},
                             {"format": "ipv6"}
                         ]
-                }
-            },
+                    }
+                },
                 "required": ["type", "remotePath", "server"],
                 "additionalProperties": False
             },
@@ -285,9 +285,44 @@ readonly?: bool
                         "minimum": 16,
                         "maximum": 512
                     }
-            },
+                },
                 "required": ["type", "sizeInMB"],
                 "additionalProperties": False
             }
-    }}
+        }
+    }
+    assert loads(input) == expected
+
+
+def test_address_ref():
+    input = """
+@address:
+    street_address: str
+    city: str
+    state: str
+
+billing_address: @address
+shipping_address: @address
+"""
+    expected = {
+        "definitions": {
+            "address": {
+                "type": "object",
+                "properties": {
+                    "street_address": {"type": "string"},
+                    "city":           {"type": "string"},
+                    "state":          {"type": "string"}
+                },
+                "required": ["street_address", "city", "state"],
+                "additionalProperties": False
+            }
+        },
+        "type": "object",
+        "properties": {
+            "billing_address": {"$ref": "#/definitions/address"},
+            "shipping_address": {"$ref": "#/definitions/address"}
+        },
+        "required": ["billing_address", "shipping_address"],
+        "additionalProperties": False
+    }
     assert loads(input) == expected

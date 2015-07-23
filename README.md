@@ -80,8 +80,13 @@ use load/loads to translate yaddle into json-schema
 
 ```py
 from yaddle import load, loads
-load("some.ydl")
+load(open("some.ydl"))
 loads("""[str]{,3}""")
+```
+
+cli
+```sh
+cat schema.ydl | python -m yaddle.tool
 ```
 
 ## more details
@@ -237,6 +242,83 @@ size?: number
     }
     "additionalProperties": true
 }
+```
+
+### oneOf, anyOf, allOf
+
+* `|` for oneOf like `@ref | @ref2`
+* `/` for anyOf
+* `&` for allOf
+
+### reference
+
+local reference
+
+```
+@address:
+    street_address: str
+    city: str
+    state: str
+
+billing_address: @address
+shipping_address: @address
+```
+
+```javascript
+{
+  "additionalProperties": false,
+  "definitions": {
+    "address": {
+      "additionalProperties": false,
+      "required": [
+        "street_address",
+        "city",
+        "state"
+      ],
+      "type": "object",
+      "properties": {
+        "city": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "street_address": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "required": [
+    "billing_address",
+    "shipping_address"
+  ],
+  "type": "object",
+  "properties": {
+    "billing_address": {
+      "$ref": "#/definitions/address"
+    },
+    "shipping_address": {
+      "$ref": "#/definitions/address"
+    }
+  }
+}
+```
+
+referece remote schema(TBD)
+
+```
+@id: http://example.com/schema
+
+@product:
+    price: num{0,}
+    title: str{,200}
+```
+
+referece it in another schema
+
+```
+products: [@http://example.com/schema#definations/product]
 ```
 
 ## examples
