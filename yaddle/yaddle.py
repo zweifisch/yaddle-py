@@ -63,7 +63,8 @@ t = lambda tp: lambda x: x.type == tp
 op = lambda s: a(Token("OP", s)) >> tokval
 
 anno = lambda tp: lambda x: (tp, x)
-append = lambda (head, tail): head + [tail] if tail else head
+append = lambda head_tail: head_tail[0] + [head_tail[1]] \
+    if head_tail[1] else head_tail[0]
 always = lambda val: lambda _: val
 strip = lambda char: lambda x: x.strip(char)
 

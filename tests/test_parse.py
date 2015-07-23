@@ -10,12 +10,12 @@ def test_tokenize():
                 "INDENT", "NAME", "OP",
                 "NAME", "OP", "NUMBER", "OP", "NUMBER", "OP", "NL",
                 "NAME", "OP", "NAME", "NL", "DEDENT"]
-    assert map(lambda x: x.type, tokenize(input)) == expected
+    assert list(map(lambda x: x.type, tokenize(input))) == expected
 
     input = '"str\\"ing" "more"'
 
     expected = ["STRING", "STRING", "NL"]
-    assert map(lambda x: x.type, tokenize(input)) == expected
+    assert list(map(lambda x: x.type, tokenize(input))) == expected
 
 
 def test_bad_indentation():
