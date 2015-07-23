@@ -184,12 +184,13 @@ end: @location
 
 def test_mount_point():
     input = """
+@"http://some.site.somewhere/entry-schema#"
 @diskDevice:
     type: disk
     device: /^/dev/[^/]+(/[^/]+)*$/
 @diskUUID:
     type: disk
-    label: /^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$/
+    label: /^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$/  # noqa
 @nfs:
     type: nfs
     remotePath: /^(/[^/]+)+$/
@@ -205,7 +206,7 @@ readonly?: bool
 ...
 """
     expected = {
-        # "id": "http://some.site.somewhere/entry-schema#",
+        "id": "http://some.site.somewhere/entry-schema#",
         # "$schema": "http://json-schema.org/draft-04/schema#",
         # "description": "schema for an fstab entry",
         "type": "object",

@@ -308,7 +308,7 @@ shipping_address: @address
 referece remote schema(TBD)
 
 ```
-@id: http://example.com/schema
+@"http://example.com/schema"
 
 @product:
     price: num{0,}
@@ -318,7 +318,9 @@ referece remote schema(TBD)
 referece it in another schema
 
 ```
-products: [@http://example.com/schema#definations/product]
+@example: "http://example.com/schema"
+
+products: [@example:product]
 ```
 
 ## examples

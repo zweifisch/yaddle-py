@@ -33,6 +33,25 @@ def test_bad_indentation():
     assert "Bad indentation at 3,1" == str(e.value)
 
 
+def test_parse_id():
+    input = """
+@"http://example.com/schema"
+"""
+    expected = ("object", ({}, [], True, {},
+                           "http://example.com/schema", {}))
+    assert parse(tokenize(input)) == expected
+
+
+def test_parse_ref_delaration():
+    input = """
+@schema "http://example.com/schema"
+"""
+    expected = ("object",
+                ({}, [], True, {}, None,
+                 {"schema": "http://example.com/schema"}))
+    assert parse(tokenize(input)) == expected
+
+
 def test_parse_enum():
     input = 'admin | author | "role with space"'
     assert parse(tokenize(input)) == ("enum", ["admin", "author",
@@ -112,14 +131,14 @@ def test_parse_object():
     input = "name: str{3,20}"
     assert parse(tokenize(input)) == ("object",
                                       ({"name": ("string", ((3, 20), None))},
-                                       ["name"], True, {}))
+                                       ["name"], True, {}, None, {}))
 
     input = """name: str{3,20}
 id: str{32,32}"""
     assert parse(tokenize(input)) == ("object",
                                       ({"name": ("string", ((3, 20), None)),
                                         "id": ("string", ((32, 32), None))},
-                                       ["name", "id"], True, {}))
+                                       ["name", "id"], True, {}, None, {}))
 
     input = """name?: str{3,20}
 id: str{32,32}
@@ -127,7 +146,7 @@ id: str{32,32}
     assert parse(tokenize(input)) == ("object",
                                       ({"name": ("string", ((3, 20), None)),
                                         "id": ("string", ((32, 32), None))},
-                                       ["id"], False, {}))
+                                       ["id"], False, {}, None, {}))
 
     input = """location:
     x: str{12,12}
@@ -136,8 +155,8 @@ id: str{32,32}
                 ({"location": ("object",
                                ({"x": ("string", ((12, 12), None)),
                                  "y": ("string", ((12, 12), None))},
-                                ["x", "y"], True, {}))},
-                 ["location"], True, {}))
+                                ["x", "y"], True, {}, None, {}))},
+                 ["location"], True, {}, None, {}))
     assert parse(tokenize(input)) == expected
 
     input = """root:
@@ -146,12 +165,13 @@ id: str{32,32}
         child2: str"""
     expected = ("object",
                 ({"root": ("object",
-                           ({"parent": ("object",
-                                        ({"child": ("string", (None, None)),
-                                          "child2": ("string", (None, None))},
-                                         ["child", "child2"], True, {}))},
-                            ["parent"], True, {}))},
-                 ["root"], True, {}))
+                           ({"parent":
+                             ("object",
+                              ({"child": ("string", (None, None)),
+                                "child2": ("string", (None, None))},
+                               ["child", "child2"], True, {}, None, {}))},
+                            ["parent"], True, {}, None, {}))},
+                 ["root"], True, {}, None, {}))
     assert parse(tokenize(input)) == expected
 
     input = """root:
@@ -167,10 +187,10 @@ id: str{32,32}
                         ("object",
                          ({"child2":
                            ("null", None)},
-                          ["child2"], True, {}))},
-                       ["child"], True, {}))},
-                    ["parent"], True, {}))},
-                 ["root"], True, {}))
+                          ["child2"], True, {}, None, {}))},
+                       ["child"], True, {}, None, {}))},
+                    ["parent"], True, {}, None, {}))},
+                 ["root"], True, {}, None, {}))
     assert parse(tokenize(input)) == expected
 
     input = """
@@ -183,10 +203,10 @@ root:
                 ({"root": ("object",
                            ({"parent": ("object",
                                         ({"child": ("string", (None, None))},
-                                         ["child"], True, {})),
+                                         ["child"], True, {}, None, {})),
                              "parent2": ("string", (None, None))},
-                            ["parent", "parent2"], True, {}))},
-                 ["root"], True, {}))
+                            ["parent", "parent2"], True, {}, None, {}))},
+                 ["root"], True, {}, None, {}))
     assert parse(tokenize(input)) == expected
 
 

@@ -73,16 +73,22 @@ def list2dict(key_optional_vals):
     kvs = {}
     definitions = {}
     sealed = True
+    refid = None
+    ref_declaration = {}
     for (key, optional, val) in key_optional_vals:
-        if key is None:
-            sealed = False
-        elif key == "@":
+        if key == "@":
             definitions[optional] = val
+        elif optional == "open":
+            sealed = False
+        elif optional == "id":
+            refid = val
+        elif optional == "extref":
+            ref_declaration[key] = val
         else:
             if not optional:
                 required.append(key)
             kvs[key] = val
-    return (kvs, required, sealed, definitions)
+    return (kvs, required, sealed, definitions, refid, ref_declaration)
 
 
 def parse(tokens):
@@ -131,9 +137,10 @@ def parse(tokens):
     nl = some(t('NL'))
     definition = op("@") + name
     key = (((name | string) + maybe(op("?"))) | definition) + skip(op(":"))
-    dots = op("...") >> always((None, None, None))
 
-    ref = skip(op("@")) + name >> anno("ref")
+    ref = skip(op("@")) + (name | name + skip(op(":")) + name) >> anno("ref")
+    ref_declaration = skip(op("@")) + name + raw_string \
+        >> (lambda name_url: (name_url[0], "extref", name_url[1]))
 
     base_schema = ref | string | number | integer | boolean | null | _format \
         | array
@@ -146,10 +153,13 @@ def parse(tokens):
         >> append >> anno("allof")
     simple_schema = anyof | oneof | allof | base_schema | enum | array
 
+    dots = op("...") >> always((None, "open", None))
+    refid = skip(op("@")) + raw_string >> (lambda x: (None, "id", x))
+
     obj = forward_decl()
     nested_obj = skip(nl) + skip(indent) + obj + skip(dedent)
     obj.define(oneplus(((key + ((simple_schema + skip(nl)) | nested_obj))
-                       | (dots + skip(nl)))
+                       | ((dots | refid | ref_declaration) + skip(nl)))
                        >> list) >> list2dict >> anno("object"))
 
     schema.define(obj | simple_schema)
@@ -206,7 +216,7 @@ def generate_schema(node):
         return ret
     elif tp == "object":
         properties = {}
-        (kvs, required, sealed, definitions) = val
+        (kvs, required, sealed, definitions, refid, ref_declarations) = val
         for (k, v) in kvs.items():
             properties[k] = generate_schema(v)
         ret = {"type": "object", "properties": properties}
@@ -214,6 +224,8 @@ def generate_schema(node):
             ret["required"] = required
         if sealed:
             ret["additionalProperties"] = False
+        if refid:
+            ret["id"] = refid
         if definitions:
             defs = {}
             for (k, v) in definitions.items():
