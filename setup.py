@@ -2,12 +2,12 @@ from setuptools import setup
 
 setup(
     name='yaddle',
-    version='0.0.1',
-    url='https://github.com/zweifisch/yaddle',
+    version='0.0.2',
+    url='https://github.com/zweifisch/yaddle-py',
     keywords='json schema',
     license='MIT',
     description='yet another data format description language',
-    long_description=open('README.md').read(),
+    long_description=open('README.rst').read(),
     author='Feng Zhou',
     author_email='zf.pascal@gmail.com',
     packages=['yaddle'],
