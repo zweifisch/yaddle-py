@@ -1,5 +1,7 @@
 # yaddle
 
+[![Build Status][travis-image]][travis-url]
+
 Yet Another Data format Description LanguagE
 
 ```yaml
@@ -347,3 +349,6 @@ fstype?: ext3 | ext4 | btrfs
 options?: [str]{1,}!
 readonly?: bool
 ```
+
+[travis-image]: https://img.shields.io/travis/zweifisch/yaddle-py.svg?style=flat
+[travis-url]: https://travis-ci.org/zweifisch/yaddle-py
